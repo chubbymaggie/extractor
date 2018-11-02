@@ -16,7 +16,6 @@ import traceback
 
 import magic
 import binwalk
-import psycopg2
 
 class Extractor(object):
     """
@@ -85,6 +84,24 @@ class Extractor(object):
             with open(outdir, "wb") as ofp:
                 ifp.seek(offset, 0)
                 ofp.write(ifp.read(size))
+
+    @staticmethod
+    def magic(indata, mime=False):
+        """
+        Performs file magic while maintaining compatibility with different
+        libraries.
+        """
+
+        try:
+            if mime:
+                mymagic = magic.open(magic.MAGIC_MIME_TYPE)
+            else:
+                mymagic = magic.open(magic.MAGIC_NONE)
+            mymagic.load()
+        except AttributeError:
+            mymagic = magic.Magic(mime)
+            mymagic.file = mymagic.from_file
+        return mymagic.file(indata)
 
     @staticmethod
     def io_md5(target):
@@ -161,6 +178,8 @@ class Extractor(object):
                     self._list.append(os.path.join(path, item))
         elif os.path.isfile(self._input):
             self._list.append(self._input)
+        else:
+            print("!! Cannot read file: %s" % (self._input,))
 
         if self.output_dir and not os.path.isdir(self.output_dir):
             os.makedirs(self.output_dir)
@@ -186,7 +205,7 @@ class ExtractionItem(object):
 
     # Maximum recursion breadth and depth
     RECURSION_BREADTH = 5
-    RECURSION_DEPTH = 2
+    RECURSION_DEPTH = 3
 
     def __init__(self, extractor, path, depth, tag=None):
         # Temporary directory
@@ -202,10 +221,14 @@ class ExtractionItem(object):
         self.item = path
 
         # Database connection
-        self.database = psycopg2.connect(database="firmware", user="firmadyne",
-                                         password="firmadyne",
-                                         host=self.extractor.database) if \
-                                         self.extractor.database else None
+        if self.extractor.database:
+            import psycopg2
+            self.database = psycopg2.connect(database="firmware",
+                                             user="firmadyne",
+                                             password="firmadyne",
+                                             host=self.extractor.database)
+        else:
+            self.database = None
 
         # Checksum
         self.checksum = Extractor.io_md5(path)
@@ -416,22 +439,22 @@ class ExtractionItem(object):
         Check if this file is blacklisted for analysis based on file type.
         """
         # First, use MIME-type to exclude large categories of files
-        filetype = magic.from_file(self.item.encode("utf-8", "surrogateescape"),
+        filetype = Extractor.magic(self.item.encode("utf-8", "surrogateescape"),
                                    mime=True)
-        if any(s in filetype for s in [b"application/x-executable",
-                                       b"application/x-dosexec",
-                                       b"application/x-object",
-                                       b"application/pdf",
-                                       b"application/msword",
-                                       b"image/", b"text/", b"video/"]):
+        if any(s in filetype for s in ["application/x-executable",
+                                       "application/x-dosexec",
+                                       "application/x-object",
+                                       "application/pdf",
+                                       "application/msword",
+                                       "image/", "text/", "video/"]):
             self.printf(">> Skipping: %s..." % filetype)
             return True
 
         # Next, check for specific file types that have MIME-type
         # 'application/octet-stream'
-        filetype = magic.from_file(self.item.encode("utf-8", "surrogateescape"))
-        if any(s in filetype for s in [b"executable", b"universal binary",
-                                       b"relocatable", b"bytecode", b"applet"]):
+        filetype = Extractor.magic(self.item.encode("utf-8", "surrogateescape"))
+        if any(s in filetype for s in ["executable", "universal binary",
+                                       "relocatable", "bytecode", "applet"]):
             self.printf(">> Skipping: %s..." % filetype)
             return True
 
@@ -683,9 +706,8 @@ def main():
     parser = argparse.ArgumentParser(description="Extracts filesystem and \
         kernel from Linux-based firmware images")
     parser.add_argument("input", action="store", help="Input file or directory")
-    parser.add_argument("output", action="store", nargs="?", default=None,
-                        help="Output directory for extracted firmware \
-                        (optional)")
+    parser.add_argument("output", action="store", nargs="?", default="images",
+                        help="Output directory for extracted firmware")
     parser.add_argument("-sql ", dest="sql", action="store", default=None,
                         help="Hostname of SQL server")
     parser.add_argument("-nf", dest="rootfs", action="store_false",

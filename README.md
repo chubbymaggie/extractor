@@ -11,6 +11,16 @@ Firmware images with multiple filesystems are not fully supported; this tool
 cannot reassemble them and will instead extract the first filesystem that has
 sufficient UNIX-like root directories (e.g. `/bin`, `/etc/`, etc.)
 
+For the impatients: Dockerize all the things!
+=============================================
+1. Install [Docker](https://docs.docker.com/engine/getstarted/)
+2. Run the dockerized extractor
+```
+git clone https://github.com/firmadyne/extractor.git
+cd extractor
+./extract.sh path/to/firmware.img path/to/output/directory
+```
+
 Dependencies
 ============
 * [fakeroot](https://fakeroot.alioth.debian.org)
@@ -19,20 +29,18 @@ Dependencies
 * [python-magic](https://github.com/ahupp/python-magic)
 
 Please use the latest version of `binwalk`. Note that there are two
-Python modules that both share the name `python-magic`; install the one linked
-above, instead of any provided by your Linux distribution.
+Python modules that both share the name `python-magic`; both should be usable,
+but only the one linked above has been tested extensively.
 
 Binwalk
 -------
 
-* [jefferson](https://github.com/firmadyne/jefferson)
+* [jefferson](https://github.com/sviehb/jefferson)
 * [sasquatch](https://github.com/firmadyne/sasquatch) (optional)
 
-When installing `binwalk`, please use the above forked versions of these two
-extraction utilities. The `jefferson` tool has been improved to support
-extraction of block and character devices, as well as an additional form of
-JFFS2 file compression. The `sasquatch` tool has been modified to make
-SquashFS file extraction errors fatal to prevent false positives.
+When installing `binwalk`, it is optional to use the forked version of the
+`sasquatch` tool, which has been modified to make SquashFS file extraction
+errors fatal to prevent false positives.
 
 Usage
 =====
